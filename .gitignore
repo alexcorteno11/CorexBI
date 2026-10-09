@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Testing
+.coverage
+htmlcov/
+
+# Editor
+.vscode/
+.idea/
+
+# Node.js (future frontend)
+node_modules/
+dist/
+.next/
+
+# Operating system
+.DS_Store
+Thumbs.db
