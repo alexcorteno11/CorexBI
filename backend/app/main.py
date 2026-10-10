@@ -2,6 +2,7 @@ from fastapi import FastAPI
 
 from app.api.analytics import router as analytics_router
 from app.api.inventory import router as inventory_router
+from app.api.products import router as products_router
 
 app = FastAPI(
     title="CorexBI API",
@@ -12,6 +13,7 @@ app = FastAPI(
 
 app.include_router(analytics_router)
 app.include_router(inventory_router)
+app.include_router(products_router)
 
 
 @app.get("/")

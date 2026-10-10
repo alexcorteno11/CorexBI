@@ -9,6 +9,8 @@ from sqlalchemy import (
     Numeric,
     String,
     func,
+    Boolean,
+    true
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,6 +25,12 @@ class Product(Base):
     category: Mapped[str] = mapped_column(String(80), nullable=False)
     price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     stock: Mapped[int] = mapped_column(nullable=False, default=0)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default=true(),
+    )
 
     sale_items: Mapped[list["SaleItem"]] = relationship(
         back_populates="product"

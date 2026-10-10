@@ -137,3 +137,209 @@ def test_invalid_limit(client):
     )
 
     assert response.status_code == 422
+
+
+def test_list_products(client):
+    response = client.get("/products")
+
+    assert response.status_code == 200
+
+    products = response.json()
+
+    assert len(products) == 3
+    assert products[0]["name"] == "Teclado"
+
+
+def test_product_not_found(client):
+    response = client.get("/products/999999")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Product not found"
+
+
+def test_create_product(client):
+    new_product = {
+        "name": "Webcam Test",
+        "category": "Perifericos",
+        "price": "950.00",
+        "stock": 12,
+    }
+
+    response = client.post(
+        "/products",
+        json=new_product,
+    )
+
+    assert response.status_code == 201
+
+    data = response.json()
+
+    assert data["name"] == "Webcam Test"
+    assert data["price"] == "950.00"
+    assert data["stock"] == 12
+    assert isinstance(data["id"], int)
+
+    get_response = client.get(
+        f"/products/{data['id']}"
+    )
+
+    assert get_response.status_code == 200
+    assert get_response.json()["name"] == "Webcam Test"
+
+
+def test_update_product(client):
+    response = client.patch(
+        "/products/1",
+        json={"price": "999.00", "stock": 20},
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["price"] == "999.00"
+    assert data["stock"] == 20
+    assert data["name"] == "Teclado"
+
+    # Verificar persistencia
+    check = client.get("/products/1")
+
+    assert check.status_code == 200
+    assert check.json()["price"] == "999.00"
+    assert check.json()["stock"] == 20
+
+
+def test_update_product_not_found(client):
+    response = client.patch(
+        "/products/999999",
+        json={"price": "500.00"},
+    )
+
+    assert response.status_code == 404
+
+
+def test_update_product_invalid_price(client):
+    response = client.patch(
+        "/products/1",
+        json={"price": "-100.00"},
+    )
+
+    assert response.status_code == 422
+
+    check = client.get("/products/1")
+
+    assert check.status_code == 200
+    assert check.json()["price"] == "850.00"
+
+
+def test_update_product_null_rejected(client):
+    response = client.patch(
+        "/products/1",
+        json={"name": None},
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_product_blank_name(client):
+    response = client.post(
+        "/products",
+        json={
+            "name": "   ",
+            "category": "Perifericos",
+            "price": "500.00",
+            "stock": 10,
+        },
+    )
+
+    assert response.status_code == 422
+
+    products = client.get("/products").json()
+    assert len(products) == 3
+
+
+def test_create_product_negative_stock(client):
+    response = client.post(
+        "/products",
+        json={
+            "name": "Mouse Gamer",
+            "category": "Perifericos",
+            "price": "750.00",
+            "stock": -5,
+        },
+    )
+
+    assert response.status_code == 422
+
+    products = client.get("/products").json()
+    assert len(products) == 3
+
+
+def test_deactivate_product(client):
+    response = client.delete("/products/1")
+
+    assert response.status_code == 204
+
+    products = client.get("/products").json()
+
+    assert len(products) == 2
+    assert all(p["id"] != 1 for p in products)
+
+    all_products = client.get(
+        "/products?include_inactive=true"
+    ).json()
+
+    assert len(all_products) == 3
+
+    product = next(
+        p for p in all_products if p["id"] == 1
+    )
+
+    assert product["is_active"] is False
+
+
+def test_get_inactive_product(client):
+    client.delete("/products/1")
+
+    response = client.get("/products/1")
+
+    assert response.status_code == 404
+
+
+def test_update_inactive_product(client):
+    client.delete("/products/1")
+
+    response = client.patch(
+        "/products/1",
+        json={"price": "999.00"},
+    )
+
+    assert response.status_code == 404
+
+
+def test_soft_delete_preserves_sales(client):
+    before = client.get(
+        "/analytics/summary"
+    ).json()
+
+    top_before = client.get(
+        "/analytics/top-products?limit=5"
+    ).json()
+
+    response = client.delete("/products/1")
+
+    assert response.status_code == 204
+
+    after = client.get(
+        "/analytics/summary"
+    ).json()
+
+    top_after = client.get(
+        "/analytics/top-products?limit=5"
+    ).json()
+
+    assert after == before
+    assert top_after == top_before
+
+    assert after["total_sales"] == 1
+    assert after["total_revenue"] == 4500.0
