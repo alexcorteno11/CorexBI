@@ -2,8 +2,8 @@ from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine, func, select
+from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base
@@ -343,3 +343,199 @@ def test_soft_delete_preserves_sales(client):
 
     assert after["total_sales"] == 1
     assert after["total_revenue"] == 4500.0
+
+
+def test_create_sale_success(client):
+    response = client.post(
+        "/sales",
+        json={
+            "items": [
+                {"product_id": 1, "quantity": 2},
+                {"product_id": 2, "quantity": 1},
+            ]
+        },
+    )
+
+    assert response.status_code == 201
+
+    data = response.json()
+
+    assert data["status"] == "completed"
+    assert data["total"] == "4500.00"
+    assert len(data["items"]) == 2
+
+    products = client.get("/products").json()
+
+    by_id = {p["id"]: p for p in products}
+
+    assert by_id[1]["stock"] == 10
+    assert by_id[2]["stock"] == 6
+
+    summary = client.get("/analytics/summary").json()
+
+    assert summary["total_sales"] == 2
+    assert summary["total_revenue"] == 9000.0
+
+
+def test_sale_insufficient_stock(client):
+    response = client.post(
+        "/sales",
+        json={
+            "items": [
+                {"product_id": 1, "quantity": 1000}
+            ]
+        },
+    )
+
+    assert response.status_code == 409
+
+    product = client.get("/products/1").json()
+    assert product["stock"] == 12
+
+    summary = client.get("/analytics/summary").json()
+    assert summary["total_sales"] == 1
+
+
+def test_sale_product_not_found(client):
+    response = client.post(
+        "/sales",
+        json={
+            "items": [
+                {"product_id": 999999, "quantity": 1}
+            ]
+        },
+    )
+
+    assert response.status_code == 404
+
+
+def test_sale_inactive_product(client):
+    delete_response = client.delete("/products/1")
+    assert delete_response.status_code == 204
+
+    response = client.post(
+        "/sales",
+        json={
+            "items": [
+                {"product_id": 1, "quantity": 1}
+            ]
+        },
+    )
+
+    assert response.status_code == 409
+
+
+def test_sale_duplicate_product(client):
+    response = client.post(
+        "/sales",
+        json={
+            "items": [
+                {"product_id": 1, "quantity": 1},
+                {"product_id": 1, "quantity": 2},
+            ]
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_sale_is_atomic_when_stock_is_insufficient(client):
+    products_before = client.get("/products").json()
+    summary_before = client.get("/analytics/summary").json()
+
+    response = client.post(
+        "/sales",
+        json={
+            "items": [
+                {"product_id": 1, "quantity": 2},
+                {"product_id": 2, "quantity": 1000},
+            ]
+        },
+    )
+
+    assert response.status_code == 409
+
+    products_after = client.get("/products").json()
+    assert products_after == products_before
+
+    summary_after = client.get("/analytics/summary").json()
+    assert summary_after == summary_before
+
+
+def test_sale_rollback_when_commit_fails(client, monkeypatch):
+    def get_database_snapshot():
+        override = client.app.dependency_overrides[get_db]
+        session_generator = override()
+        db = next(session_generator)
+
+        try:
+            sales_count = db.scalar(
+                select(func.count()).select_from(Sale)
+            )
+
+            items_count = db.scalar(
+                select(func.count()).select_from(SaleItem)
+            )
+
+            stock = db.execute(
+                select(Product.id, Product.stock)
+                .order_by(Product.id)
+            ).all()
+
+            return {
+                "sales": sales_count,
+                "items": items_count,
+                "stock": list(stock),
+            }
+
+        finally:
+            session_generator.close()
+
+    before = get_database_snapshot()
+
+    original_rollback = Session.rollback
+    rollback_calls = []
+
+    def failing_commit(self):
+        raise RuntimeError(
+            "Simulated database commit failure"
+        )
+
+    def tracking_rollback(self):
+        rollback_calls.append(True)
+        return original_rollback(self)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            Session,
+            "commit",
+            failing_commit,
+        )
+
+        patch.setattr(
+            Session,
+            "rollback",
+            tracking_rollback,
+        )
+
+        with pytest.raises(
+            RuntimeError,
+            match="Simulated database commit failure",
+        ):
+            client.post(
+                "/sales",
+                json={
+                    "items": [
+                        {"product_id": 1, "quantity": 2},
+                        {"product_id": 2, "quantity": 1},
+                    ]
+                },
+            )
+
+    assert len(rollback_calls) >= 1
+
+    after = get_database_snapshot()
+
+    assert after["sales"] == before["sales"]
+    assert after["items"] == before["items"]
+    assert after["stock"] == before["stock"]
