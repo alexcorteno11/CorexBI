@@ -1,5 +1,5 @@
 
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
   Activity,
   AlertTriangle,
@@ -16,6 +16,9 @@ import { useAnalyticsSummary } from './hooks/useAnalyticsSummary'
 import { useDashboardData } from './hooks/useDashboardData'
 import LowStockPanel from './components/LowStockPanel'
 import ProductsPage from './pages/ProductsPage'
+import RevenueChart from './components/RevenueChart'
+import { useRevenueOverTime } from './hooks/useRevenueOverTime'
+import RevenueOverTimeChart from './components/RevenueOverTimeChart'
 
 type Section = 'Dashboard' | 'Productos' | 'Ventas' | 'Inventario'
 
@@ -47,6 +50,15 @@ function App() {
     error: dashboardError,
     refresh: refreshDashboard,
   } = useDashboardData()
+
+  
+  const {
+    data: revenueOverTime,
+    loading: revenueOverTimeLoading,
+    error: revenueOverTimeError,
+    refresh: refreshRevenueOverTime,
+  } = useRevenueOverTime()
+
 
 
   const revenue = summary
@@ -277,42 +289,54 @@ function App() {
                   <div className="flex items-center justify-between">
                     <div>
                       <h4 className="text-lg font-semibold">
-                        Análisis de ventas
+                        Ingresos por producto
                       </h4>
-                      <p className="mt-1 text-sm text-slate-500">
-                        Preparado para conectar datos reales
-                      </p>
                     </div>
                     <BarChart3 className="text-blue-600" />
                   </div>
 
                   <div className="mt-8 flex min-h-64 flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 text-center">
-                    <BarChart3 size={38} className="text-slate-300" />
-                    <p className="mt-3 font-medium">
-                      Aquí aparecerá la gráfica de ventas
-                    </p>
-                    <p className="mt-1 max-w-sm px-4 text-sm text-slate-500">
-                      Agregaremos Recharts cuando conectemos
-                      los indicadores con FastAPI.
-                    </p>
+                    <RevenueChart
+                      data={topProducts}
+                      loading={dashboardLoading}
+                    />
                   </div>
                 </article>
+
+                
+                <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <div className="mb-5">
+                    <h3 className="text-lg font-semibold text-slate-900">
+                      Evolución de ingresos
+                    </h3>
+
+                    <p className="mt-1 text-sm text-slate-500">
+                      Ingresos diarios de las ventas completadas.
+                    </p>
+                  </div>
+
+                  <RevenueOverTimeChart
+                    data={revenueOverTime}
+                    loading={revenueOverTimeLoading}
+                    error={revenueOverTimeError}
+                    onRetry={refreshRevenueOverTime}
+                  />
+                </section>
+
 
                 <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                   <h4 className="text-lg font-semibold">
                     Productos destacados
                   </h4>
                   <p className="mt-1 text-sm text-slate-500">
-                    Ranking real por ingresos generados
+                    Ejemplos para diseñar la interfaz
                   </p>
                     <div className="mt-6 space-y-5">
-                      {!dashboardLoading &&
-                        !dashboardError &&
-                        (topProducts?.products.length ?? 0) === 0 && (
+                      {topProducts?.products.length === 0 && (
                         <p className="text-sm text-slate-500">
                           Todavía no hay ventas registradas.
                         </p>
-                        )}
+                      )}
 
                       {topProducts?.products.map((product, index) => (
                         <div

@@ -3,6 +3,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_db
+from app.schemas.analytics import RevenueOverTimeResponse
 
 router = APIRouter(
     prefix="/analytics",
@@ -69,4 +70,54 @@ def get_top_products(
             for row in results
         ],
         "currency": "MXN",
+    }
+
+
+@router.get(
+    "/revenue-over-time",
+    response_model=RevenueOverTimeResponse,
+)
+def get_revenue_over_time(
+    db: Session = Depends(get_db),
+):
+    dialect = db.get_bind().dialect.name
+
+    if dialect == "postgresql":
+        sale_day_expression = """
+            (s.sale_date AT TIME ZONE 'America/Mexico_City')::date
+        """
+
+    elif dialect == "sqlite":
+        sale_day_expression = "DATE(s.sale_date)"
+
+    else:
+        raise RuntimeError(
+            f"Unsupported database dialect: {dialect}"
+        )
+
+    query = text(f"""
+        SELECT
+            {sale_day_expression} AS sale_day,
+            COUNT(DISTINCT s.id) AS sales_count,
+            SUM(si.quantity * si.unit_price) AS total_revenue
+        FROM sales AS s
+        JOIN sale_items AS si
+            ON si.sale_id = s.id
+        WHERE s.status = 'completed'
+        GROUP BY sale_day
+        ORDER BY sale_day ASC
+    """)
+
+    results = db.execute(query).all()
+
+    return {
+        "currency": "MXN",
+        "data": [
+            {
+                "date": row.sale_day,
+                "sales_count": int(row.sales_count),
+                "revenue": float(row.total_revenue),
+            }
+            for row in results
+        ],
     }

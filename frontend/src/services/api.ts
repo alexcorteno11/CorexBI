@@ -6,7 +6,8 @@ import type {
   LowStockResponse,
   Product,
   ProductCreate,
-  ProductUpdate
+  ProductUpdate,
+  RevenueOverTimeResponse
 } from '../types/analytics'
 
 const API_BASE_URL = '/api'
@@ -149,3 +150,20 @@ export async function deactivateProduct(
   }
 }
 
+export async function getRevenueOverTime(
+  signal?: AbortSignal
+): Promise<RevenueOverTimeResponse> {
+  const response = await fetch(
+    '/api/analytics/revenue-over-time',
+    { signal }
+  )
+
+  if(!response.ok) {
+    throw new Error(
+      `No se pudieron obtener los ingresos por fecha (HTTP ${response.status})`
+    )
+  }
+
+  return (await response.json()) as RevenueOverTimeResponse
+  
+}

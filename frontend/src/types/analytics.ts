@@ -62,3 +62,14 @@ export interface ProductUpdate {
     price?: string
     stock?: number
 }
+
+export interface DailyRevenue {
+    date: string
+    sales_count: number
+    revenue: number
+}
+
+export interface RevenueOverTimeResponse {
+    currency: string
+    data: DailyRevenue[]
+}

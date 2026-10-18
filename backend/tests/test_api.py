@@ -1,4 +1,5 @@
 from decimal import Decimal
+from datetime import date
 
 import pytest
 from fastapi.testclient import TestClient
@@ -539,3 +540,65 @@ def test_sale_rollback_when_commit_fails(client, monkeypatch):
     assert after["sales"] == before["sales"]
     assert after["items"] == before["items"]
     assert after["stock"] == before["stock"]
+
+
+def test_revenue_over_time(client):
+    response = client.get(
+        "/analytics/revenue-over-time"
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["currency"] == "MXN"
+    assert len(data["data"]) == 1
+
+    day = data["data"][0]
+
+    assert day["sales_count"] == 1
+    assert day["revenue"] == 4500.0
+
+    date.fromisoformat(day["date"])
+
+
+def test_revenue_over_time_excludes_cancelled_sales(client):
+    override = client.app.dependency_overrides[get_db]
+    db_generator = override()
+    db = next(db_generator)
+
+    try:
+        product = db.query(Product).first()
+
+        cancelled_sale = Sale(status="cancelled")
+        db.add(cancelled_sale)
+        db.flush()
+
+        db.add(
+            SaleItem(
+                sale_id=cancelled_sale.id,
+                product_id=product.id,
+                quantity=1,
+                unit_price=Decimal("999.00"),
+            )
+        )
+
+        db.commit()
+    finally:
+        db_generator.close()
+
+    response = client.get(
+        "/analytics/revenue-over-time"
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert sum(
+        day["sales_count"] for day in data["data"]
+    ) == 1
+
+    assert sum(
+        day["revenue"] for day in data["data"]
+    ) == 4500.0
