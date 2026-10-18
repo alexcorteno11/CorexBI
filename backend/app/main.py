@@ -13,7 +13,7 @@ app = FastAPI(
     version="0.3.0",
 )
 
-# Registrar todos los routers
+
 app.include_router(analytics_router)
 app.include_router(inventory_router)
 app.include_router(products_router)
