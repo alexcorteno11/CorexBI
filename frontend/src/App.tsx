@@ -19,6 +19,8 @@ import ProductsPage from './pages/ProductsPage'
 import RevenueChart from './components/RevenueChart'
 import { useRevenueOverTime } from './hooks/useRevenueOverTime'
 import RevenueOverTimeChart from './components/RevenueOverTimeChart'
+import InventoryPage from './pages/InventoryPage'
+import SalesPage from './pages/SalesPage'
 
 type Section = 'Dashboard' | 'Productos' | 'Ventas' | 'Inventario'
 
@@ -33,7 +35,27 @@ function App() {
   const [activeSection, setActiveSection] =
     useState<Section>('Dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  
+
+  const [startDate, setStartDate] = useState('2026-10-09')
+  const [endDate, setEndDate] = useState('2026-10-12')
+
+  const [appliedStartDate, setAppliedStartDate] =
+    useState('2026-10-09')
+
+  const [appliedEndDate, setAppliedEndDate] =
+    useState('2026-10-12')
+
+  const invalidDateRange = Boolean(
+    startDate &&
+    endDate &&
+    startDate > endDate
+  )
+
+  const datesHaveChanged =
+    startDate !== appliedStartDate ||
+    endDate !== appliedEndDate
+
+
   const {
     data: summary,
     loading,
@@ -41,7 +63,7 @@ function App() {
     refresh,
   } = useAnalyticsSummary()
 
-  
+
   const {
     topProducts,
     lowStock,
@@ -51,13 +73,22 @@ function App() {
     refresh: refreshDashboard,
   } = useDashboardData()
 
-  
+
   const {
     data: revenueOverTime,
     loading: revenueOverTimeLoading,
     error: revenueOverTimeError,
     refresh: refreshRevenueOverTime,
-  } = useRevenueOverTime()
+  } = useRevenueOverTime(
+    appliedStartDate,
+    appliedEndDate
+  )
+
+  function handleSaleCreated() {
+  refresh()
+  refreshDashboard()
+  refreshRevenueOverTime()
+  }
 
 
 
@@ -227,9 +258,9 @@ function App() {
                     Reintentar
                   </button>
                 </div>
-                
+
               )}
-              
+
               {dashboardLoading && (
                 <p role="status" className="mt-3 text-sm text-blue-600">
                   Cargando productos e inventario...
@@ -261,7 +292,7 @@ function App() {
                 </p>
               )}
 
-                
+
               </section>
 
               <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -303,7 +334,7 @@ function App() {
                   </div>
                 </article>
 
-                
+
                 <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                   <div className="mb-5">
                     <h3 className="text-lg font-semibold text-slate-900">
@@ -314,6 +345,77 @@ function App() {
                       Ingresos diarios de las ventas completadas.
                     </p>
                   </div>
+
+
+                  <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <label className="space-y-2">
+                        <span className="block text-sm font-medium text-slate-700">
+                          Fecha inicial
+                        </span>
+
+                        <input
+                          type="date"
+                          value={startDate}
+                          onChange={(event) => setStartDate(event.target.value)}
+                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                        />
+                      </label>
+
+                      <label className="space-y-2">
+                        <span className="block text-sm font-medium text-slate-700">
+                          Fecha final
+                        </span>
+
+                        <input
+                          type="date"
+                          value={endDate}
+                          onChange={(event) => setEndDate(event.target.value)}
+                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                        />
+                      </label>
+                    </div>
+
+                    {invalidDateRange && (
+                      <p role="alert" className="mt-3 text-sm text-red-600">
+                        La fecha inicial no puede ser posterior a la fecha final.
+                      </p>
+                    )}
+
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-xs text-slate-500">
+                        Los límites son inclusivos. Puedes dejar una fecha vacía.
+                      </p>
+
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setStartDate('')
+                            setEndDate('')
+                            setAppliedStartDate('')
+                            setAppliedEndDate('')
+                          }}
+                          className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                        >
+                          Ver todo
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={invalidDateRange || !datesHaveChanged}
+                          onClick={() => {
+                            setAppliedStartDate(startDate)
+                            setAppliedEndDate(endDate)
+                          }}
+                          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Aplicar filtros
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
 
                   <RevenueOverTimeChart
                     data={revenueOverTime}
@@ -381,16 +483,25 @@ function App() {
               onRetry={refreshDashboard}
               onCreated={refreshDashboard}
             />
-          ) : (
-            <section className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-              <h3 className="text-2xl font-bold">
-                Módulo de {activeSection}
-              </h3>
-                      <p className="mt-1 text-sm text-slate-500">
-                        Ranking real por ingresos generados
-                      </p>
-            </section>
-          )}
+
+          ) : activeSection === 'Inventario' ? (
+            <InventoryPage
+              products={products}
+              lowStock={lowStock}
+              loading={dashboardLoading}
+              error={dashboardError}
+              onRetry={refreshDashboard}
+            />
+
+          ) : activeSection === 'Ventas' ? (
+            <SalesPage
+              products={products}
+              loading={dashboardLoading}
+              error={dashboardError}
+              onRetry={refreshDashboard}
+              onSaleCreated={handleSaleCreated}
+            />
+          ) : null}
 
           <footer className="border-t border-slate-200 pt-5 text-center text-xs text-slate-400">
             CorexBI · Plataforma de análisis de ventas e inventario

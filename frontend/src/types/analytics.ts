@@ -73,3 +73,26 @@ export interface RevenueOverTimeResponse {
     currency: string
     data: DailyRevenue[]
 }
+
+export interface SaleItemCreate {
+    product_id: number
+    quantity: number
+}
+
+export interface SaleCreate {
+    items: SaleItemCreate[]
+}
+
+export interface SaleItemResponse {
+    product_id: number
+    quantity: number
+    unit_price: string
+    subtotal: string
+}
+
+export interface SaleResponse {
+    sale_id: number
+    status: string
+    total: string
+    items: SaleItemResponse[]
+}

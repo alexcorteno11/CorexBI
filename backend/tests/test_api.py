@@ -602,3 +602,126 @@ def test_revenue_over_time_excludes_cancelled_sales(client):
     assert sum(
         day["revenue"] for day in data["data"]
     ) == 4500.0
+
+
+def test_revenue_over_time_date_range(client):
+    # Obtener la fecha de la venta creada por el fixture.
+    override = client.app.dependency_overrides[get_db]
+    db_generator = override()
+    db = next(db_generator)
+
+    try:
+        sale = db.query(Sale).filter(
+            Sale.status == "completed"
+        ).first()
+
+        assert sale is not None
+        sale_date = sale.sale_date.date().isoformat()
+    finally:
+        db_generator.close()
+
+    response = client.get(
+        "/analytics/revenue-over-time",
+        params={
+            "start_date": sale_date,
+            "end_date": sale_date,
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["currency"] == "MXN"
+    assert len(data["data"]) == 1
+    assert data["data"][0]["date"] == sale_date
+    assert data["data"][0]["sales_count"] == 1
+    assert data["data"][0]["revenue"] == 4500.0
+
+
+def test_revenue_over_time_empty_range(client):
+    response = client.get(
+        "/analytics/revenue-over-time",
+        params={
+            "start_date": "2000-01-01",
+            "end_date": "2000-01-31",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "currency": "MXN",
+        "data": [],
+    }
+
+
+def test_revenue_over_time_invalid_range(client):
+    response = client.get(
+        "/analytics/revenue-over-time",
+        params={
+            "start_date": "2026-10-12",
+            "end_date": "2026-10-09",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_revenue_over_time_invalid_date_format(client):
+    response = client.get(
+        "/analytics/revenue-over-time",
+        params={
+            "start_date": "fecha-invalida",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_low_stock_excludes_inactive_products(client):
+    response = client.post(
+        "/products",
+        json={
+            "name": "Producto para prueba de inventario",
+            "category": "Pruebas",
+            "price": "100.00",
+            "stock": 2,
+        },
+    )
+
+    assert response.status_code == 201
+
+    product_id = response.json()["id"]
+
+    response = client.get(
+        "/inventory/low-stock?threshold=5"
+    )
+
+    assert response.status_code == 200
+
+    product_ids = [
+        product["id"]
+        for product in response.json()["products"]
+    ]
+
+    assert product_id in product_ids
+
+    response = client.delete(
+        f"/products/{product_id}"
+    )
+
+    assert response.status_code == 204
+
+    response = client.get(
+        "/inventory/low-stock?threshold=5"
+    )
+
+    assert response.status_code == 200
+
+    product_ids = [
+        product["id"]
+        for product in response.json()["products"]
+    ]
+
+    assert product_id not in product_ids
+    assert response.json()["total_low_stock"] == 1

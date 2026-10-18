@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from datetime import date
 
 from app.core.dependencies import get_db
 from app.schemas.analytics import RevenueOverTimeResponse
@@ -78,22 +79,63 @@ def get_top_products(
     response_model=RevenueOverTimeResponse,
 )
 def get_revenue_over_time(
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
+    if (
+        start_date is not None
+        and end_date is not None
+        and start_date > end_date
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="start_date must be before or equal to end_date",
+        )
+
     dialect = db.get_bind().dialect.name
 
     if dialect == "postgresql":
         sale_day_expression = """
             (s.sale_date AT TIME ZONE 'America/Mexico_City')::date
         """
-
     elif dialect == "sqlite":
+        # SQLite es utilizado en las pruebas automatizadas.
+        # No realiza conversión de zona horaria.
         sale_day_expression = "DATE(s.sale_date)"
-
     else:
         raise RuntimeError(
             f"Unsupported database dialect: {dialect}"
         )
+
+    conditions = ["s.status = 'completed'"]
+    parameters = {}
+
+    if start_date is not None:
+        if dialect == "postgresql":
+            conditions.append(
+                f"{sale_day_expression} >= CAST(:start_date AS DATE)"
+            )
+        else:
+            conditions.append(
+                f"{sale_day_expression} >= :start_date"
+            )
+
+        parameters["start_date"] = start_date.isoformat()
+
+    if end_date is not None:
+        if dialect == "postgresql":
+            conditions.append(
+                f"{sale_day_expression} <= CAST(:end_date AS DATE)"
+            )
+        else:
+            conditions.append(
+                f"{sale_day_expression} <= :end_date"
+            )
+
+        parameters["end_date"] = end_date.isoformat()
+
+    where_clause = " AND ".join(conditions)
 
     query = text(f"""
         SELECT
@@ -103,12 +145,12 @@ def get_revenue_over_time(
         FROM sales AS s
         JOIN sale_items AS si
             ON si.sale_id = s.id
-        WHERE s.status = 'completed'
+        WHERE {where_clause}
         GROUP BY sale_day
         ORDER BY sale_day ASC
     """)
 
-    results = db.execute(query).all()
+    results = db.execute(query, parameters).all()
 
     return {
         "currency": "MXN",

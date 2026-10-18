@@ -21,6 +21,7 @@ def get_low_stock(
         SELECT id, name, category, stock, price
         FROM products
         WHERE stock <= :threshold
+            AND is_active = TRUE
         ORDER BY stock ASC, id ASC
     """)
 

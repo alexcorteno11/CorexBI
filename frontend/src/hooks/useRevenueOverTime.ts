@@ -4,7 +4,10 @@ import { getRevenueOverTime } from "../services/api";
 import type { RevenueOverTimeResponse } from "../types/analytics";
 
 
-export function useRevenueOverTime() {
+export function useRevenueOverTime(
+    startDate: string,
+    endDate: string
+) {
     const[data, setData] =
     useState<RevenueOverTimeResponse | null>(null)
 
@@ -21,6 +24,8 @@ export function useRevenueOverTime() {
 
             try {
                 const result = await getRevenueOverTime(
+                    startDate || undefined,
+                    endDate || undefined,
                     controller.signal
                 )
                 
@@ -46,7 +51,7 @@ export function useRevenueOverTime() {
         void loadData()
 
         return () => controller.abort()
-    }, [reloadKey])
+    }, [startDate, endDate, reloadKey])
 
     return {
         data,

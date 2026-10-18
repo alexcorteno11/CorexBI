@@ -24,6 +24,8 @@ htmlcov/
 node_modules/
 dist/
 .next/
+.env.local
+.env.*.local
 
 # Operating system
 .DS_Store

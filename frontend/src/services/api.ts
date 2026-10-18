@@ -7,7 +7,9 @@ import type {
   Product,
   ProductCreate,
   ProductUpdate,
-  RevenueOverTimeResponse
+  RevenueOverTimeResponse,
+  SaleCreate,
+  SaleResponse
 } from '../types/analytics'
 
 const API_BASE_URL = '/api'
@@ -151,12 +153,27 @@ export async function deactivateProduct(
 }
 
 export async function getRevenueOverTime(
+  startDate?: string,
+  endDate?: string,
   signal?: AbortSignal
 ): Promise<RevenueOverTimeResponse> {
-  const response = await fetch(
-    '/api/analytics/revenue-over-time',
-    { signal }
-  )
+  const params = new URLSearchParams()
+
+  if(startDate) {
+    params.set('start_date', startDate)
+  }
+
+  if (endDate) {
+    params.set('end_date', endDate)
+  }
+
+  const query = params.toString()
+
+  const url = query
+    ? `/api/analytics/revenue-over-time?${query}`
+    : '/api/analytics/revenue-over-time'
+
+  const response = await fetch(url, { signal })
 
   if(!response.ok) {
     throw new Error(
@@ -166,4 +183,43 @@ export async function getRevenueOverTime(
 
   return (await response.json()) as RevenueOverTimeResponse
   
+}
+
+
+export async function createSale(
+  sale: SaleCreate
+): Promise<SaleResponse> {
+  const response = await fetch('/api/sales', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(sale),
+  })
+
+  if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error(
+        'Uno de los productos ya no existe.'
+      )
+    }
+
+    if (response.status === 409) {
+      throw new Error(
+        'No se pudo registrar la venta. Verifica que los productos estén activos y tengan existencias suficientes.'
+      )
+    }
+
+    if (response.status === 422) {
+      throw new Error(
+        'La venta contiene productos o cantidades inválidas.'
+      )
+    }
+
+    throw new Error(
+      `Error al registrar la venta (HTTP ${response.status}).`
+    )
+  }
+
+  return (await response.json()) as SaleResponse
 }
