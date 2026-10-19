@@ -1,9 +1,12 @@
+
+from collections import Counter
 from decimal import Decimal
 
 from sqlalchemy import select
 
 from app.database import SessionLocal
 from app.models import Product, Sale, SaleItem
+
 
 SAMPLE_SALES = [
     [
@@ -24,30 +27,55 @@ SAMPLE_SALES = [
 
 def seed_sales():
     with SessionLocal.begin() as session:
-        existing_sale = session.scalar(select(Sale.id).limit(1))
+        existing_sale = session.scalar(
+            select(Sale.id).limit(1)
+        )
 
         if existing_sale is not None:
             print(
-                "Ya existen ventas. No se insertaron datos para evitar duplicarlos"
+                "Ya existen ventas. No se insertaron "
+                "datos para evitar duplicados."
             )
             return
 
         products = {
             product.name: product
-            for product in session.scalars(select(Product)).all()
+            for product in session.scalars(
+                select(Product)
+            ).all()
         }
+
+        required_stock = Counter()
 
         for sale_data in SAMPLE_SALES:
             for product_name, quantity in sale_data:
                 if product_name not in products:
                     raise ValueError(
-                        f"No existe el producto : {product_name}"
+                        f"Producto inexistente: {product_name}"
                     )
 
-                if products[product_name].stock < quantity:
+                if quantity <= 0:
                     raise ValueError(
-                        f"Stock insuficiente : {product_name}"
+                        f"Cantidad inválida: {product_name}"
                     )
+
+                required_stock[product_name] += quantity
+
+        # Validar el consumo acumulado de todas las ventas.
+        for product_name, quantity in required_stock.items():
+            product = products[product_name]
+
+            if not product.is_active:
+                raise ValueError(
+                    f"Producto inactivo: {product_name}"
+                )
+
+            if product.stock < quantity:
+                raise ValueError(
+                    f"Stock insuficiente para {product_name}. "
+                    f"Disponible: {product.stock}, "
+                    f"requerido: {quantity}"
+                )
 
         for sale_data in SAMPLE_SALES:
             sale = Sale(status="completed")
@@ -65,7 +93,13 @@ def seed_sales():
                     unit_price=price,
                 )
 
-        print("Ventas de demostracion registradas correctamente")
+                session.add(item)
+                product.stock -= quantity
+
+    print(
+        "Ventas de demostración registradas "
+        "correctamente."
+    )
 
 
 if __name__ == "__main__":
