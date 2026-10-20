@@ -198,7 +198,6 @@ function App() {
         <div className="absolute bottom-6 left-6 right-6 rounded-xl bg-white/5 p-4">
           <p className="text-sm font-semibold">CorexBI v0.1</p>
           <p className="mt-1 text-xs text-slate-400">
-            Frontend en desarrollo
           </p>
         </div>
       </aside>
@@ -431,7 +430,7 @@ function App() {
                     Productos destacados
                   </h4>
                   <p className="mt-1 text-sm text-slate-500">
-                    Ejemplos para diseñar la interfaz
+                    Productos con mayor ganancia
                   </p>
                     <div className="mt-6 space-y-5">
                       {topProducts?.products.length === 0 && (
