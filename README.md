@@ -227,7 +227,7 @@ The tests cover product searching, sales quantity validation, cancellation of pr
 ### Dashboard
 
 ![CorexBI Dashboard](docs/screenshots/dashboard.png)
-(docs/screenshots/dashboard2.png)
+![CorexBI Analytics](docs/screenshots/dashboard2.png)
 
 ### Product Management
 
